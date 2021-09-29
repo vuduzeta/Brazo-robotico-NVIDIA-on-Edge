@@ -53,6 +53,15 @@ def arm_clamp(enable):
         Arm.Arm_serial_servo_write(6, 135, 400)
     time.sleep(.5)
 
+def arm_calibration(s_time):
+    Arm.Arm_serial_servo_write6(90, 90, 90, 90, 90, 180, s_time)
+    time.sleep(s_time/1000)
+
+def arm_pos_initial(s_time):
+    Arm.Arm_serial_servo_write6(90, 130, 0, 0, 90, 90, s_time)
+    time.sleep(s_time/1000)
+
+arm_pos_initial(1000)
 arm_extended(1000)
 arm_move_right(1000)
 arm_move_center(1000)
@@ -71,7 +80,10 @@ time.sleep(2)
 for i in range(5):
     arm_clamp(0)
     arm_clamp(1)
-
+time.sleep(2)
+arm_calibration(1000)
+time.sleep(2)
+arm_pos_initial(1000)
 
 
 
