@@ -46,6 +46,13 @@ def arm_move_left(s_time = 500):
     Arm.Arm_serial_servo_write(1, 180, s_time)
     time.sleep(s_time/1000)
 
+def arm_clamp(enable):
+    if enable == 0:
+        Arm.Arm_serial_servo_write(6, 60, 400)
+    else:
+        Arm.Arm_serial_servo_write(6, 135, 400)
+    time.sleep(.5)
+
 arm_extended(1000)
 arm_move_right(1000)
 arm_move_center(1000)
@@ -60,6 +67,10 @@ arm_retracted(1000)
 arm_move_right(1000)
 arm_move_center(1000)
 arm_move_left(1000)
+time.sleep(2)
+for i in range(5):
+    arm_clamp(0)
+    arm_clamp(1)
 
 
 
