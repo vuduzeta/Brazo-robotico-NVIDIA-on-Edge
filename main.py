@@ -1,11 +1,22 @@
-import time
-from Arm_Lib import Arm_Device
 import os
+import time
+import argparse
+import sys
+import numpy
+
+from Arm_Lib import Arm_Device
+import cv2
+import pycuda.autoinit  # This is needed for initializing CUDA driver
+from utils.yolo_classes import get_cls_dict
+from utils.camera import add_camera_args, Camera
+from utils.display import open_window, set_display, show_fps
+from utils.visualization import BBoxVisualization
+from utils.yolo_with_plugins import TrtYOLO
 
 Arm = Arm_Device()
 time.sleep(.1)
 
-# Función utilizada para retraer el brazo robótico.
+#Función utilizada para retraer el brazo robótico.
 # Los servos manipulados con esta función son S2, S3, S4 y S5.
 # Ángulo de los servos S2=130°,S3=0°,S4=0° ,S5=90°.
 # Entrada : entero que representa el tiempo de rotación de los servos.
@@ -18,7 +29,7 @@ def arm_retracted(s_time = 500):
     time.sleep(.01)
     Arm.Arm_serial_servo_write(4, 0, s_time)
     time.sleep(.01)
-    Arm.Arm_serial_servo_write(5, 90, int(s_time*1.2))
+    Arm.Arm_serial_servo_write(5, 270, int(s_time*1.2))
     time.sleep(s_time/1000)
 
 # Función utilizada para extender el brazo robótico al centro.
@@ -111,8 +122,89 @@ def arm_calibration(s_time = 500):
 # Entrada :
 # Salida  : no retorna datos de salida.
 def arm_pos_initial(s_time = 500):
-    Arm.Arm_serial_servo_write6(90, 130, 0, 0, 90, 90, s_time)
+    Arm.Arm_serial_servo_write6(90, 95, 0, 0, 90, 90, s_time)
     time.sleep(s_time/1000)
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser = add_camera_args(parser)
+    parser.add_argument('-c', '--category_num', type=int, default=80)
+    parser.add_argument('-m', '--model', type=str, default='yolov4-416')
+    parser.add_argument('-l', '--letter_box', action='store_true', default=True)
+    args = parser.parse_args()
+    return args
+
+#**{'a':1,'b':2} -> 'a'=1, 'b'=2
+#a=trt_scan(model='hola')
+#{**dict1,**dict2}
+#{'a':1,'b':2}, {'b':1,'c':2}
+#{'a'=1, 'b'=1, 'c'=2}
+#type(self)._current_model
+#self._current_model
+
+class trt_scan:
+    def __init__(self,**kwargs):
+        if not hasattr(type(self),'_current_args'):
+            type(self)._current_args=parse_args()
+        if not hasattr(type(self),'trt_yolo'):
+            type(self).trt_yolo=TrtYOLO(type(self)._current_args.model, type(self)._current_args.category_num, type(self)._current_args.letter_box)
+        if not hasattr(type(self),'cls_dict'):
+            type(self).cls_dict=get_cls_dict(type(self)._current_args.category_num)
+        self.WINDOW_NAME=kwargs.get('name','TrtYOLODemo')
+        self.conf_th=kwargs.get('conf_th',0.3)
+        self.vis=BBoxVisualization(type(self).cls_dict)
+        return
+    
+    def run(self):
+        cam = Camera(type(self)._current_args)
+        img = cam.read()
+        cv2.namedWindow(self.WINDOW_NAME, cv2.WINDOW_NORMAL)
+        cv2.setWindowTitle(self.WINDOW_NAME, self.WINDOW_NAME)
+        cv2.resizeWindow(self.WINDOW_NAME, cam.img_width, cam.img_height)
+        #open_window(WINDOW_NAME, 'Camera TensorRT YOLO Demo',cam.img_width, cam.img_height)
+        if img is not None:
+            boxes, confs, clss = type(self).trt_yolo.detect(img, self.conf_th)
+            img =  self.vis.draw_bboxes(img, boxes, confs, clss)
+            cv2.imshow(self.WINDOW_NAME, img)
+            cv2.waitKey()
+        cam.release()
+        cv2.destroyAllWindows()
+        return [clss.tolist(), confs.tolist(), boxes.tolist()]
+    
+    def __del__(self):
+        return
+        
+def detect():
+    return trt_scan().run()
+
+def scan_objects(s_time = 500):
+    items = []
+    arm_pos_initial()
+    arm_turn_right()
+    for angle in range(0, 181, 90):
+        Arm.Arm_serial_servo_write(1, angle, s_time)
+        items.append(detect())
+        items[len(items)-1].append(angle)
+        print('\n', angle)
+        print('\n', items)
+    arm_pos_initial()
+    time.sleep(s_time/1000)
+    return items
+
+def find_object(obj = 39.):             #39. corresponde a clase botella.
+    det_objects = scan_objects()
+    length = len(det_objects)
+    for i in range(length):
+        len_obj = len(det_objects[i][0])
+        for j in range(len_obj):
+            if det_objects[i][0][j] == obj:
+                found = det_objects[i][2][j]
+                Arm.Arm_serial_servo_write(1, det_objects[i][3], 500)
+            else:
+                found = -1
+    print(found)
+    time.sleep(5)
+
 
 # Función utilizada para hacer pruebas de las funciones con los distintos
 # movimientos del brazo robótico.
@@ -124,16 +216,17 @@ def menu():
         text = '''
 Para manipular el brazo robótico debe elegir una de las siguientes ópciones:
 
-   1 Retraer el brazo.
-   2 Extender al centro el brazo.
-   3 Extender completamente el brazo.     
-   4 Girar el brazo a la derecha.
-   5 Girar el brazo al centro.
-   6 Girar el brazo a la izquierda.
-   7 Manipular la pinza.
-   8 Posición de calibración.
-   9 Posición inicial.
-   s Salir.
+    1 Retraer el brazo.
+    2 Extender al centro el brazo.
+    3 Extender completamente el brazo.
+    4 Girar el brazo a la derecha.
+    5 Girar el brazo al centro.
+    6 Girar el brazo a la izquierda.
+    7 Manipular la pinza.
+    8 Posición de calibración.
+    9 Posición inicial.
+   10 Escanear.
+    s Salir.
 '''
         print(text)
         option = input("Selecciona una opción: ")
@@ -168,8 +261,14 @@ Para manipular el brazo robótico debe elegir una de las siguientes ópciones:
             arm_calibration()
         elif option == "9":
             arm_pos_initial()
+        elif option == "10":
+            find_object(39.)
         elif option == "s":
             break
+        elif option == "11":
+            arm_turn_left(2000)
+            time.sleep(2)
+            arm_turn_right(2000)
         else:
             print("Opción inválida.")
 
