@@ -2,7 +2,7 @@ import os
 import time
 import argparse
 import sys
-import numpy
+import numpy as np
 
 from Arm_Lib import Arm_Device
 import cv2
@@ -71,7 +71,7 @@ def arm_extended(s_time = 500):
 #           Cuanto mayor sea el valor de tiempo, más lenta será la rotación.
 # Salida  : no retorna datos de salida.
 def arm_turn_right(s_time = 500):
-    Arm.Arm_serial_servo_write(1, 0, s_time)
+    Arm.Arm_serial_servo_write(1, 90, s_time)
     time.sleep(s_time/1000)
 
 # Función utilizada para girar al centro el brazo robótico.
@@ -81,7 +81,7 @@ def arm_turn_right(s_time = 500):
 #           Cuanto mayor sea el valor de tiempo, más lenta será la rotación.
 # Salida  : no retorna datos de salida.
 def arm_turn_center(s_time = 500):
-    Arm.Arm_serial_servo_write(1, 90, s_time)
+    Arm.Arm_serial_servo_write(1, 180, s_time)
     time.sleep(s_time/1000)
 
 # Función utilizada para girar completamente a la izquierda el brazo robótico.
@@ -91,7 +91,7 @@ def arm_turn_center(s_time = 500):
 #           Cuanto mayor sea el valor de tiempo, más lenta será la rotación.
 # Salida  : no retorna datos de salida.
 def arm_turn_left(s_time = 500):
-    Arm.Arm_serial_servo_write(1, 180, s_time)
+    Arm.Arm_serial_servo_write(1, 270, s_time)
     time.sleep(s_time/1000)
 
 # Función utilizada para manipular la pinza y la muñeca de la mano.
@@ -113,7 +113,7 @@ def arm_gripper(pos_gripper = 60, pos_wrist = 270, s_time = 400 ):
 # Entrada :
 # Salida  : no retorna datos de salida.
 def arm_calibration(s_time = 500):
-    Arm.Arm_serial_servo_write6(90, 90, 90, 90, 90, 180, s_time)
+    Arm.Arm_serial_servo_write6(180, 90, 90, 90, 90, 180, s_time)
     time.sleep(s_time/1000)
 
 # Función utilizada para mover el brazo robótico a su posición inicial.
@@ -122,7 +122,7 @@ def arm_calibration(s_time = 500):
 # Entrada :
 # Salida  : no retorna datos de salida.
 def arm_pos_initial(s_time = 500):
-    Arm.Arm_serial_servo_write6(90, 95, 0, 0, 90, 90, s_time)
+    Arm.Arm_serial_servo_write6(180, 95, 0, 0, 90, 10, s_time)
     time.sleep(s_time/1000)
 
 def parse_args():
@@ -181,30 +181,114 @@ def scan_objects(s_time = 500):
     items = []
     arm_pos_initial()
     arm_turn_right()
-    for angle in range(0, 181, 90):
+    for angle in range(45, 246, 40):
         Arm.Arm_serial_servo_write(1, angle, s_time)
         items.append(detect())
         items[len(items)-1].append(angle)
-        print('\n', angle)
-        print('\n', items)
+#        print('\n', angle)
+#        print('\n', items)
     arm_pos_initial()
     time.sleep(s_time/1000)
     return items
 
-def find_object(obj = 39.):             #39. corresponde a clase botella.
+def find_object(obj):
     det_objects = scan_objects()
     length = len(det_objects)
     for i in range(length):
         len_obj = len(det_objects[i][0])
         for j in range(len_obj):
             if det_objects[i][0][j] == obj:
-                found = det_objects[i][2][j]
-                Arm.Arm_serial_servo_write(1, det_objects[i][3], 500)
+                return [det_objects[i][2][j], det_objects[i][3]]
             else:
-                found = -1
-    print(found)
-    time.sleep(5)
+                return [[],-1]
 
+def take_object(obj, s_time = 500):
+    found_obj = find_object(obj)
+    print('\n',found_obj,'\n')
+    c_obj_x = (found_obj[0][2] - found_obj[0][0])/2+found_obj[0][0]
+    c_obj_y = (found_obj[0][3] - found_obj[0][1])/2+found_obj[0][1]
+    a_obj = found_obj[1]
+    print(c_obj_x, c_obj_y, a_obj,'\n')
+    crd_x = c_obj_x - (640/2)
+    crd_y = 480 - c_obj_y
+    radio = np.sqrt(crd_x**2 + crd_y**2)
+    theta = np.degrees(np.arctan2(crd_y, crd_x))
+    print(crd_x, crd_y, radio, theta,'\n')
+    if (radio >= 0) and (radio < 146):
+        a_servo = a_obj - 90 + theta
+        Arm.Arm_serial_servo_write(5, 270, int(s_time*1.2))
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(4, 70, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(1, a_servo, s_time)
+        time.sleep(.5)
+        Arm.Arm_serial_servo_write(2, 10, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(3, 68, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(4, 0, s_time)
+        time.sleep(.01)
+        time.sleep(s_time/1000)
+    elif (radio > 145) and (radio < 243):
+        a_servo = a_obj - 90 + theta
+        Arm.Arm_serial_servo_write(5, 270, int(s_time*1.2))
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(4, 70, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(1, a_servo, s_time)
+        time.sleep(.5)
+        Arm.Arm_serial_servo_write(2, 0, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(3, 90, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(4, 0, s_time)
+        time.sleep(.01)
+        time.sleep(s_time/1000)
+    elif (radio > 242) and (radio < 340):
+        a_servo = a_obj - 90 + theta
+        Arm.Arm_serial_servo_write(5, 270, int(s_time*1.2))
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(4, 70, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(1, a_servo, s_time)
+        time.sleep(.5)
+        Arm.Arm_serial_servo_write(2, 0, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(3, 83, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(4, 15, s_time)
+        time.sleep(.01)
+        time.sleep(s_time/1000)
+    elif (radio > 339) and (radio < 434):
+        a_servo = a_obj - 90 + theta
+        Arm.Arm_serial_servo_write(5, 270, int(s_time*1.2))
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(4, 70, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(1, a_servo, s_time)
+        time.sleep(.5)
+        Arm.Arm_serial_servo_write(2, 0, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(3, 76, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(4, 33, s_time)
+        time.sleep(.01)
+        time.sleep(s_time/1000)
+    elif (radio > 433) and (radio < 481):
+        a_servo = a_obj - 90 + theta
+        Arm.Arm_serial_servo_write(5, 270, int(s_time*1.2))
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(4, 70, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(1, a_servo, s_time)
+        time.sleep(.5)
+        Arm.Arm_serial_servo_write(2, 0, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(3, 65, s_time)
+        time.sleep(.01)
+        Arm.Arm_serial_servo_write(4, 55, s_time)
+        time.sleep(.01)
+        time.sleep(s_time/1000)
 
 # Función utilizada para hacer pruebas de las funciones con los distintos
 # movimientos del brazo robótico.
@@ -212,7 +296,7 @@ def find_object(obj = 39.):             #39. corresponde a clase botella.
 # Salida  : no retorna datos de salida.
 def menu():
     while True:
-        os.system('clear')
+       # os.system('clear')
         text = '''
 Para manipular el brazo robótico debe elegir una de las siguientes ópciones:
 
@@ -226,6 +310,10 @@ Para manipular el brazo robótico debe elegir una de las siguientes ópciones:
     8 Posición de calibración.
     9 Posición inicial.
    10 Escanear.
+   11 Servo 1 (Girar brazo).
+   12 Servo 2.
+   13 Servo 3.
+   14 Servo 4.
     s Salir.
 '''
         print(text)
@@ -262,10 +350,26 @@ Para manipular el brazo robótico debe elegir una de las siguientes ópciones:
         elif option == "9":
             arm_pos_initial()
         elif option == "10":
-            find_object(39.)
+            take_object(39., 1000)              #39. corresponde a clase botella.
+        elif option == "11":
+            angle = int(input("Ingrese el ángulo: "))
+            Arm.Arm_serial_servo_write(1, angle, 2000)
+            time.sleep(2000/1000)
+        elif option == "12":
+            angle = int(input("Ingrese el ángulo: "))
+            Arm.Arm_serial_servo_write(2, angle, 2000)
+            time.sleep(2000/1000)
+        elif option == "13":
+            angle = int(input("Ingrese el ángulo: "))
+            Arm.Arm_serial_servo_write(3, angle, 2000)
+            time.sleep(2000/1000)
+        elif option == "14":
+            angle = int(input("Ingrese el ángulo: "))
+            Arm.Arm_serial_servo_write(4, angle, 2000)
+            time.sleep(2000/1000)
         elif option == "s":
             break
-        elif option == "11":
+        elif option == "20":
             arm_turn_left(2000)
             time.sleep(2)
             arm_turn_right(2000)
